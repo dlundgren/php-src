@@ -46,6 +46,8 @@
 #include "php_string.h"
 #include "php_rand.h"
 #include "php_smart_str.h"
+#include "../../Zend/zend_operators.h"
+
 #ifdef HAVE_SPL
 #include "ext/spl/spl_array.h"
 #endif
@@ -862,22 +864,44 @@ PHP_FUNCTION(prev)
    Move array argument's internal pointer to the next element and return it */
 PHP_FUNCTION(next)
 {
-	HashTable *array;
-	zval **entry;
+	zval *array;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "H", &array) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "A", &array) == FAILURE) {
 		return;
 	}
 
-	zend_hash_move_forward(array);
-
-	if (return_value_used) {
-		if (zend_hash_get_current_data(array, (void **) &entry) == FAILURE) {
-			RETURN_FALSE;
+#ifdef HAVE_SPL
+	switch(Z_TYPE_P(array)) {
+		case IS_OBJECT: {
+			if (instanceof_function(Z_OBJCE_P(array), spl_ce_Iterator TSRMLS_CC)) {
+				zend_call_method_with_0_params(&array, NULL, NULL, "next", NULL);
+				if (return_value_used) {
+					zval *entry;
+					zend_call_method_with_0_params(&array, NULL, NULL, "current", &entry);
+					if (entry) {
+						RETURN_ZVAL_FAST(entry);
+					}
+					return;
+				}
+			}
 		}
+		case IS_ARRAY: {
+#endif
+			zval **entry;
+			HashTable *array_hash = HASH_OF(array);
+			zend_hash_move_forward(array_hash);
 
-		RETURN_ZVAL_FAST(*entry);
+			if (return_value_used) {
+				if (zend_hash_get_current_data(array_hash, (void **) &entry) == FAILURE) {
+					RETURN_FALSE;
+				}
+
+				RETURN_ZVAL_FAST(*entry);
+			}
+#ifdef HAVE_SPL
+		}
 	}
+#endif
 }
 /* }}} */
 
@@ -885,22 +909,44 @@ PHP_FUNCTION(next)
    Set array argument's internal pointer to the first element and return it */
 PHP_FUNCTION(reset)
 {
-	HashTable *array;
-	zval **entry;
+	zval *array;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "H", &array) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "A", &array) == FAILURE) {
 		return;
 	}
 
-	zend_hash_internal_pointer_reset(array);
-
-	if (return_value_used) {
-		if (zend_hash_get_current_data(array, (void **) &entry) == FAILURE) {
-			RETURN_FALSE;
+#ifdef HAVE_SPL
+	switch(Z_TYPE_P(array)) {
+		case IS_OBJECT: {
+			if (instanceof_function(Z_OBJCE_P(array), spl_ce_Iterator TSRMLS_CC)) {
+				zend_call_method_with_0_params(&array, NULL, NULL, "rewind", NULL);
+				if (return_value_used) {
+					zval *entry;
+					zend_call_method_with_0_params(&array, NULL, NULL, "current", &entry);
+					if (entry) {
+						RETURN_ZVAL_FAST(entry);
+					}
+					return;
+				}
+			}
 		}
+		case IS_ARRAY: {
+#endif
+			zval **entry;
+			HashTable *array_hash = HASH_OF(array);
+			zend_hash_internal_pointer_reset(array_hash);
 
-		RETURN_ZVAL_FAST(*entry);
+			if (return_value_used) {
+				if (zend_hash_get_current_data(array_hash, (void **) &entry) == FAILURE) {
+					RETURN_FALSE;
+				}
+
+				RETURN_ZVAL_FAST(*entry);
+			}
+#ifdef HAVE_SPL
+		}
 	}
+#endif
 }
 /* }}} */
 
@@ -908,18 +954,35 @@ PHP_FUNCTION(reset)
    Return the element currently pointed to by the internal array pointer */
 PHP_FUNCTION(current)
 {
-	HashTable *array;
-	zval **entry;
+	zval *array;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "H", &array) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "A", &array) == FAILURE) {
 		return;
 	}
 
-	if (zend_hash_get_current_data(array, (void **) &entry) == FAILURE) {
-		RETURN_FALSE;
+#ifdef HAVE_SPL
+	switch (Z_TYPE_P(array)) {
+		case IS_OBJECT: {
+			if (Z_OBJ_HT_P(array)->get_class_entry && instanceof_function(Z_OBJCE_P(array), spl_ce_Iterator TSRMLS_CC)) {
+				zval *entry;
+				zend_call_method_with_0_params(&array, NULL, NULL, "current", &entry);
+				if (entry) {
+					RETURN_ZVAL_FAST(entry);
+				}
+				return;
+			}
+		}
+		case IS_ARRAY: {
+#endif
+			zval **entry;
+			if (zend_hash_get_current_data(HASH_OF(array), (void **) &entry) == FAILURE) {
+				RETURN_FALSE;
+			}
+#ifdef HAVE_SPL
+			RETURN_ZVAL_FAST(*entry);
+		}
 	}
-
-	RETURN_ZVAL_FAST(*entry);
+#endif
 }
 /* }}} */
 
@@ -927,13 +990,31 @@ PHP_FUNCTION(current)
    Return the key of the element currently pointed to by the internal array pointer */
 PHP_FUNCTION(key)
 {
-	HashTable *array;
+	zval *array;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "H", &array) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "A", &array) == FAILURE) {
 		return;
 	}
 
-	zend_hash_get_current_key_zval(array, return_value);
+#ifdef HAVE_SPL
+	switch (Z_TYPE_P(array)) {
+		case IS_OBJECT: {
+			if (instanceof_function(Z_OBJCE_P(array), spl_ce_Iterator TSRMLS_CC)) {
+				zval *entry;
+				zend_call_method_with_0_params(&array, NULL, NULL, "key", &entry);
+				if (entry) {
+					RETURN_ZVAL_FAST(entry);
+				}
+				return;
+			}
+		}
+		case IS_ARRAY: {
+#endif
+			zend_hash_get_current_key_zval(HASH_OF(array), return_value);
+#ifdef HAVE_SPL
+		}
+	}
+#endif
 }
 /* }}} */
 
