@@ -1175,26 +1175,53 @@ PHP_FUNCTION(prev)
    Move array argument's internal pointer to the next element and return it */
 PHP_FUNCTION(next)
 {
-	HashTable *array;
-	zval *entry;
+	zval *target;
 
+#ifndef FAST_ZPP
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "A/", &target) == FAILURE) {
+		return;
+	}
+#else
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_ARRAY_OR_OBJECT_HT_EX(array, 0, 1)
+		Z_PARAM_ARRAY_OR_OBJECT_EX(target, 0, 1)
 	ZEND_PARSE_PARAMETERS_END();
+#endif
 
-	zend_hash_move_forward(array);
+	switch (Z_TYPE_P(target)) {
+		case IS_OBJECT:
+			/* if the object implements Iterator we call it's current() method */
+			if (instanceof_function(Z_OBJCE_P(target), spl_ce_Iterator)) {
+				zval entry;
+				zend_call_method_with_0_params(target, NULL, NULL, "next", &entry);
+				if (USED_RET()) {
+					zend_call_method_with_0_params(target, NULL, NULL, "current", &entry);
+					if (Z_TYPE(entry) != IS_UNDEF) {
+						ZVAL_COPY(return_value, &entry);
+						zval_ptr_dtor(&entry);
+					}
+				}
+				return;
+			}
+			/* fall through intentional to keep old behavior */
+		case IS_ARRAY: {
+			zval *entry;
+			HashTable *target_hash = HASH_OF(target);
 
-	if (USED_RET()) {
-		if ((entry = zend_hash_get_current_data(array)) == NULL) {
-			RETURN_FALSE;
+			zend_hash_move_forward(target_hash);
+
+			if (USED_RET()) {
+				if ((entry = zend_hash_get_current_data(target_hash)) == NULL) {
+					RETURN_FALSE;
+				}
+
+				if (Z_TYPE_P(entry) == IS_INDIRECT) {
+					entry = Z_INDIRECT_P(entry);
+				}
+
+				ZVAL_DEREF(entry);
+				ZVAL_COPY(return_value, entry);
+			}
 		}
-
-		if (Z_TYPE_P(entry) == IS_INDIRECT) {
-			entry = Z_INDIRECT_P(entry);
-		}
-
-		ZVAL_DEREF(entry);
-		ZVAL_COPY(return_value, entry);
 	}
 }
 /* }}} */
@@ -1203,26 +1230,52 @@ PHP_FUNCTION(next)
    Set array argument's internal pointer to the first element and return it */
 PHP_FUNCTION(reset)
 {
-	HashTable *array;
-	zval *entry;
+	zval *target;
 
+#ifndef FAST_ZPP
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "A/", &target) == FAILURE) {
+		return;
+	}
+#else
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_ARRAY_OR_OBJECT_HT_EX(array, 0, 1)
+		Z_PARAM_ARRAY_OR_OBJECT_EX(target, 0, 1)
 	ZEND_PARSE_PARAMETERS_END();
+#endif
 
-	zend_hash_internal_pointer_reset(array);
+	switch (Z_TYPE_P(target)) {
+		case IS_OBJECT:
+			/* if the object implements Iterator we call it's current() method */
+			if (instanceof_function(Z_OBJCE_P(target), spl_ce_Iterator)) {
+				zval entry;
+				zend_call_method_with_0_params(target, NULL, NULL, "rewind", &entry);
+				if (USED_RET()) {
+					zend_call_method_with_0_params(target, NULL, NULL, "current", &entry);
+					if (Z_TYPE(entry) != IS_UNDEF) {
+						ZVAL_COPY(return_value, &entry);
+						zval_ptr_dtor(&entry);
+					}
+				}
+				return;
+			}
+			/* fall through intentional to keep old behavior */
+		case IS_ARRAY: {
+			zval *entry;
+			HashTable *target_hash = HASH_OF(target);
+			zend_hash_internal_pointer_reset(target_hash);
 
-	if (USED_RET()) {
-		if ((entry = zend_hash_get_current_data(array)) == NULL) {
-			RETURN_FALSE;
+			if (USED_RET()) {
+				if ((entry = zend_hash_get_current_data(target_hash)) == NULL) {
+					RETURN_FALSE;
+				}
+
+				if (Z_TYPE_P(entry) == IS_INDIRECT) {
+					entry = Z_INDIRECT_P(entry);
+				}
+
+				ZVAL_DEREF(entry);
+				ZVAL_COPY(return_value, entry);
+			}
 		}
-
-		if (Z_TYPE_P(entry) == IS_INDIRECT) {
-			entry = Z_INDIRECT_P(entry);
-		}
-
-		ZVAL_DEREF(entry);
-		ZVAL_COPY(return_value, entry);
 	}
 }
 /* }}} */
@@ -1231,23 +1284,43 @@ PHP_FUNCTION(reset)
    Return the element currently pointed to by the internal array pointer */
 PHP_FUNCTION(current)
 {
-	HashTable *array;
-	zval *entry;
+	zval *target;
 
+#ifndef FAST_ZPP
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "A", &target) == FAILURE) {
+		return;
+	}
+#else
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_ARRAY_OR_OBJECT_HT(array)
+		Z_PARAM_ARRAY_OR_OBJECT_EX(target, 0, 1)
 	ZEND_PARSE_PARAMETERS_END();
-
-	if ((entry = zend_hash_get_current_data(array)) == NULL) {
-		RETURN_FALSE;
+#endif
+	switch (Z_TYPE_P(target)) {
+		case IS_OBJECT:
+			/* if the object implements Iterator we call it's current() method */
+			if (instanceof_function(Z_OBJCE_P(target), spl_ce_Iterator)) {
+				zval entry;
+				zend_call_method_with_0_params(target, NULL, NULL, "current", &entry);
+				if (Z_TYPE(entry) != IS_UNDEF) {
+					ZVAL_COPY(return_value, &entry);
+					zval_ptr_dtor(&entry);
+				}
+				return;
+			}
+			/* fall through intentional to keep old behavior */
+		case IS_ARRAY: {
+			zval *entry;
+			if ((entry = zend_hash_get_current_data(HASH_OF(target))) == NULL) {
+				RETURN_FALSE;
+			}
+			if (Z_TYPE_P(entry) == IS_INDIRECT) {
+				entry = Z_INDIRECT_P(entry);
+			}
+			ZVAL_DEREF(entry);
+			ZVAL_COPY(return_value, entry);
+			break;
+		}
 	}
-
-	if (Z_TYPE_P(entry) == IS_INDIRECT) {
-		entry = Z_INDIRECT_P(entry);
-	}
-
-	ZVAL_DEREF(entry);
-	ZVAL_COPY(return_value, entry);
 }
 /* }}} */
 
@@ -1255,13 +1328,36 @@ PHP_FUNCTION(current)
    Return the key of the element currently pointed to by the internal array pointer */
 PHP_FUNCTION(key)
 {
-	HashTable *array;
+	zval *target;
 
+#ifndef FAST_ZPP
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "A", &target) == FAILURE) {
+		return;
+	}
+#else
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_ARRAY_OR_OBJECT_HT(array)
+		Z_PARAM_ARRAY_OR_OBJECT_EX(target, 0, 1)
 	ZEND_PARSE_PARAMETERS_END();
+#endif
+	switch (Z_TYPE_P(target)) {
+		case IS_OBJECT:
+			/* if the object implements Iterator we call it's current() method */
+			if (instanceof_function(Z_OBJCE_P(target), spl_ce_Iterator)) {
+				zval entry;
+				zend_call_method_with_0_params(target, NULL, NULL, "key", &entry);
+				if (Z_TYPE(entry) != IS_UNDEF) {
+					ZVAL_COPY(return_value, &entry);
+					zval_ptr_dtor(&entry);
+				}
+				return;
+			}
+			/* fall through intentional to keep old behavior */
+		case IS_ARRAY: {
+			zend_hash_get_current_key_zval(HASH_OF(target), return_value);
+			break;
+		}
+	}
 
-	zend_hash_get_current_key_zval(array, return_value);
 }
 /* }}} */
 
