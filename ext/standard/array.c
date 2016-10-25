@@ -46,7 +46,6 @@
 #include "php_string.h"
 #include "php_rand.h"
 #include "php_smart_str.h"
-#include "../../Zend/zend_operators.h"
 
 #ifdef HAVE_SPL
 #include "ext/spl/spl_array.h"
